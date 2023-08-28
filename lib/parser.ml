@@ -47,8 +47,7 @@ let skip (p : 'a parser) (p1 : 'b parser) = (fun _ x -> x) <$> p <*> p1
 let rskip (p : 'a parser) (p1 : 'b parser) = (fun x _ -> x) <$> p <*> p1
 let ( *> ) = skip
 let ( <* ) = rskip
-let id = Parser (fun s -> Ok ((), s))
-let optional p = ignore <$> p <|> id
+let optional p = ignore <$> p <|> pure ()
 let defer (f : unit -> 'a parser) = Parser (fun s -> run (f ()) s)
 let append_char c s = s ^ String.make 1 c
 
@@ -81,7 +80,7 @@ let rec satisfy_many_aux (preds : (char -> bool) list) (acc : string)
 let satisfy_many (preds : (char -> bool) list) =
   Parser (fun s -> satisfy_many_aux preds "" s)
 
-let sequence s =
+let exact_str s =
   let str = s |> String.to_seq |> List.of_seq in
   satisfy_many (List.map (fun c -> ( = ) c) str)
 
@@ -93,14 +92,24 @@ let rbrace = satisfy (( = ) '}')
 let lsquare = satisfy (( = ) '[')
 let rsquare = satisfy (( = ) ']')
 let colon = satisfy (( = ) ':')
-let space = satisfy (( = ) ' ')
-let true_ = (fun _ -> true) <$> sequence "true"
-let false_ = (fun _ -> false) <$> sequence "false"
-let null = sequence "null"
+
+let space =
+  many (pure ())
+    (pure () <* (satisfy (( = ) ' ') <|> newline <|> satisfy (( = ) '\t')))
+    (fun _ _ -> ())
+
+let true_ = (fun _ -> true) <$> exact_str "true"
+let false_ = (fun _ -> false) <$> exact_str "false"
+let null = exact_str "null"
 let quote = satisfy (( = ) '"')
 let dot = satisfy (( = ) '.')
 let digit = satisfy is_digit
 let string_ = quote *> many (pure "") char_ append_char <* quote
+
+let sequence (p : 'a parser) (purefn : 'a list parser) : 'a list parser =
+  let sep = space *> comma <* space in
+  let append h t = h :: t in
+  append <$> p <* sep <*> many purefn (sep *> p) append <|> pure []
 
 let number =
   let* num =
