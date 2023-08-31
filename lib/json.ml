@@ -1,60 +1,69 @@
-(* TODO: support for escaped and unicode characters *)
+(*
+    TODO:
+     * support for escaped and unicode characters
+     * stringify
+     * lookup and insertion
+     * Track line number and column number in errors
+     * tests
+     * error if json does not end with last }
+*)
 open Parser
 
-type 'a json_array = 'a list
+type 'a jarray = 'a list
 
-module JsonMap = Map.Make (String)
+type 'a jobj = (string * 'a) list
 
-type 'a obj = (string * 'a) list
+and jvalue =
+  | JNull
+  | JBool of bool
+  | JString of string
+  | JNumber of float
+  | JArray of jvalue jarray
+  | JObject of jvalue jobj
 
-and value =
-  | Null
-  | Bool of bool
-  | Str of string
-  | Number of float
-  | Array of value json_array
-  | Object of value obj
+let obj_null = (fun _ -> JNull) <$> null
+let obj_bool = (fun b -> JBool b) <$> (true_ <|> false_)
+let obj_string = (fun s -> JString s) <$> string_
+let obj_number = (fun n -> JNumber n) <$> number
 
-let trim =
-  let* _ = space in
-  let* _ = comma in
-  pure ()
+(* let rec jentry (_ : unit) = *)
+(*   let* k = string_ in *)
+(*   let* _ = space in *)
+(*   let* _ = colon in *)
+(*   let* _ = space in *)
+(*   let* v = jvalue () in *)
+(*   Parser (fun s -> Ok ((k, v), s)) *)
 
-let obj_null = (fun _ -> Null) <$> null <* trim
-let obj_bool = (fun b -> Bool b) <$> (true_ <|> false_) <* trim
-let obj_string = (fun s -> Str s) <$> string_ <* trim
-let obj_number = (fun n -> Number n) <$> number <* trim
+let rec jentry (_ : unit) =
+  (fun k v -> (k, v)) <$> string_ <*> space *> colon *> space *> jvalue ()
 
-let rec obj_entry (_ : unit) =
-  let* _ = space in
-  let* k = string_ in
-  let* _ = space in
-  let* _ = colon in
-  let* _ = space in
-  let* v = obj_value () in
-  Parser (fun s -> Ok ((k, v), s))
+and jvalue (_ : unit) =
+  obj_null <|> jrecords () <|> obj_string <|> obj_number <|> obj_bool
+  <|> jarray ()
 
-and obj_value (_ : unit) =
-  space
-  *> (obj_null <|> obj_records () <|> obj_string <|> obj_number <|> obj_bool
-    <|> obj_array ())
+(* and jarray (_ : unit) = *)
+(*   let* _ = lsquare in *)
+(*   let* _ = space in *)
+(*   let* values = sequence (jvalue ()) (pure []) in *)
+(*   let* _ = space in *)
+(*   let* _ = rsquare in *)
+(*   pure (JArray values) *)
+and jarray (_ : unit) =
+  (fun x -> JArray x)
+  <$> lsquare *> space *> sequence (jvalue ()) (pure [])
+  <* space <* rsquare
 
-and obj_array (_ : unit) =
-  let* _ = space in
-  let* _ = lsquare in
-  let* _ = space in
-  let* values = sequence (obj_value ()) (pure []) in
-  let* _ = space in
-  let* _ = rsquare in
-  pure (Array values)
+and jrecords (_ : unit) =
+  (fun x -> JObject x)
+  <$> (space *> lbrace *> space *> sequence (jentry ()) (pure [])
+      <* space <* rbrace)
+(* and jrecords (_ : unit) = *)
+(*   let* _ = space in *)
+(*   let* _ = lbrace in *)
+(*   let* _ = space in *)
+(*   let* records = sequence (jentry ()) (pure []) in *)
+(*   let* _ = space in *)
+(*   let* _ = rbrace in *)
+(*   pure (JObject records) *)
 
-and obj_records (_ : unit) =
-  let* _ = space in
-  let* _ = lbrace in
-  let* _ = space in
-  let* records = sequence (obj_entry ()) (pure []) in
-  let* _ = space in
-  let* _ = rbrace in
-  pure (Object records)
-
-let parse = obj_records ()
+let parse = run @@ jrecords ()

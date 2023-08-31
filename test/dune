@@ -1,2 +1,3 @@
 (test
- (name json))
+ (name tests)
+ (libraries ounit2 json_parser))

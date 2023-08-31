@@ -22,7 +22,7 @@ let alt (p : 'a parser) (p1 : 'b parser) =
   Parser
     (fun (s : string) ->
       let res = run p s in
-      match res with Error _ -> run p1 s | _ -> res)
+      Result.fold ~ok:(fun _ -> res) ~error:(fun _ -> run p1 s) res)
 
 let ( <|> ) = alt
 let mtuple f (v, str) = (f v, str)
@@ -33,15 +33,11 @@ let ( let+ ) = fmap
 let bind (p : 'a parser) (f : 'a -> 'b parser) : 'b parser =
   Parser
     (fun s ->
-      match run p s with Error e -> Error e | Ok (v, str) -> run (f v) str)
+      Result.join @@ Result.map (fun (v, str) -> run (f v) str) @@ run p s)
 
 let ( >>= ) = bind
 let ( let* ) = bind
-
-let apply (fp : ('a -> 'b) parser) (p : 'a parser) =
-  let* f = fp in
-  f <$> p
-
+let apply (fp : ('a -> 'b) parser) (p : 'a parser) = fp >>= fun x -> x <$> p
 let ( <*> ) = apply
 let skip (p : 'a parser) (p1 : 'b parser) = (fun _ x -> x) <$> p <*> p1
 let rskip (p : 'a parser) (p1 : 'b parser) = (fun x _ -> x) <$> p <*> p1
@@ -49,6 +45,7 @@ let ( *> ) = skip
 let ( <* ) = rskip
 let optional p = ignore <$> p <|> pure ()
 let defer (f : unit -> 'a parser) = Parser (fun s -> run (f ()) s)
+let prepend_char c s = String.make 1 c ^ s
 let append_char c s = s ^ String.make 1 c
 
 let rec some (null_case : 'b parser) (p : 'a parser) (cons : 'a -> 'b -> 'b) :
@@ -58,7 +55,6 @@ let rec some (null_case : 'b parser) (p : 'a parser) (cons : 'a -> 'b -> 'b) :
 and many (null_case : 'b parser) (p : 'a parser) (cons : 'a -> 'b -> 'b) =
   some null_case p cons <|> null_case
 
-(* Utility parsers *)
 let char_ =
   Parser
     (fun s ->
@@ -72,10 +68,10 @@ let rec satisfy_many_aux (preds : (char -> bool) list) (acc : string)
     (s : string) =
   match preds with
   | [] -> Ok (acc, s)
-  | h :: t -> (
-      match run (satisfy h) s with
-      | Error e -> Error e
-      | Ok (c, str) -> satisfy_many_aux t (append_char c acc) str)
+  | h :: t ->
+      Result.join
+      @@ Result.map (fun (c, str) -> satisfy_many_aux t (append_char c acc) str)
+      @@ run (satisfy h) s
 
 let satisfy_many (preds : (char -> bool) list) =
   Parser (fun s -> satisfy_many_aux preds "" s)
@@ -85,8 +81,9 @@ let exact_str s =
   satisfy_many (List.map (fun c -> ( = ) c) str)
 
 let is_digit c = match c with '0' .. '9' -> true | _ -> false
+let normal_char = satisfy (fun c -> c <> '"' && c <> '\\')
 let comma = satisfy (( = ) ',')
-let newline = (satisfy (( = ) '\r') |> optional) *> satisfy (( = ) '\n')
+let newline = (optional @@ satisfy (( = ) '\r')) *> satisfy (( = ) '\n')
 let lbrace = satisfy (( = ) '{')
 let rbrace = satisfy (( = ) '}')
 let lsquare = satisfy (( = ) '[')
@@ -104,16 +101,17 @@ let null = exact_str "null"
 let quote = satisfy (( = ) '"')
 let dot = satisfy (( = ) '.')
 let digit = satisfy is_digit
-let string_ = quote *> many (pure "") char_ append_char <* quote
+let string_ = quote *> many (pure "") normal_char prepend_char <* quote
 
 let sequence (p : 'a parser) (purefn : 'a list parser) : 'a list parser =
-  let sep = space *> comma <* space in
-  let append h t = h :: t in
-  append <$> p <* sep <*> many purefn (sep *> p) append <|> pure []
+  let sep = space *> comma *> space in
+  List.cons <$> space *> p <*> (many purefn (sep *> p) List.cons <|> pure [])
 
 let number =
   let* num =
     (fun s -> float_of_string_opt s |> Option.to_result ~none:NotANumberError)
-    <$> some (pure "") (digit <|> dot) append_char
+    <$> some (pure "")
+          (digit <|> dot <|> satisfy (fun x -> x = '-' || x = 'e' || x = 'E'))
+          prepend_char
   in
   match num with Error e -> fail e | Ok v -> pure v
