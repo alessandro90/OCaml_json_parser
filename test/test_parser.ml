@@ -91,6 +91,9 @@ let parser_tests =
          ("newline-lf" >:: fun _ -> check_newline "\nsomething" "something");
          ("newline-crlf" >:: fun _ -> check_newline "\r\nsomething" "something");
          ("check-string" >:: fun _ -> check_string "\"this\" absd" "this");
+         ( "check-string" >:: fun _ ->
+           check_string "\"this\nis\nescaped\" and something else"
+             "this\nis\nescaped" );
          ( "check-exact-string" >:: fun _ ->
            check_exact_string "nullplus something" "null" );
          ( "check-exact-string-fail" >:: fun _ ->

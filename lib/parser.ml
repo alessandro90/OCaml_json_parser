@@ -101,7 +101,17 @@ let null = exact_str "null"
 let quote = satisfy (( = ) '"')
 let dot = satisfy (( = ) '.')
 let digit = satisfy is_digit
-let string_ = quote *> many (pure "") normal_char prepend_char <* quote
+
+let escape =
+  exact_str {|\"|} *> pure '"'
+  <|> exact_str {|\n|} *> pure '\n'
+  <|> exact_str {|\t|} *> pure '\t'
+  <|> exact_str {|\r|} *> pure '\r'
+  <|> exact_str {|\b|} *> pure '\b'
+  <|> exact_str {|\\|} *> pure '\\'
+
+let string_ =
+  quote *> many (pure "") (normal_char <|> escape) prepend_char <* quote
 
 let sequence (p : 'a parser) (purefn : 'a list parser) : 'a list parser =
   let sep = space *> comma *> space in

@@ -1,6 +1,6 @@
 (*
     TODO:
-     * support for escaped and unicode characters
+     * support for unicode characters
      * stringify
      * lookup and insertion
      * Track line number and column number in errors
