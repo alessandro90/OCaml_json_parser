@@ -43,4 +43,4 @@ and jrecords (_ : unit) =
   <$> (space *> lbrace *> space *> sequence (defer_ jentry) (pure [])
       <* space <* rbrace)
 
-let parse = run @@ jrecords ()
+let parse = run (jrecords () <* space)
