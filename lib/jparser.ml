@@ -54,11 +54,17 @@ let rec to_string (jv : jvalue) : string =
   | JArray a -> jarray_to_string a
 
 and jobject_to_string (obj : jvalue jobj) : string =
-  "{"
+  "{ "
   ^ List.fold_left
-      (fun acc (k, v) -> acc ^ "\"" ^ k ^ "\":" ^ to_string v)
+      (fun acc (k, v) ->
+        acc ^ (if acc <> "" then ", \"" else "\"") ^ k ^ "\": " ^ to_string v)
       "" obj
-  ^ "}"
+  ^ " }"
 
 and jarray_to_string (a : jvalue jarray) : string =
-  "[" ^ List.fold_left (fun acc v -> acc ^ ", " ^ to_string v) "" a ^ "]"
+  "[ "
+  ^ List.fold_left
+      (fun acc v ->
+        match acc with "" -> to_string v | _ -> acc ^ ", " ^ to_string v)
+      "" a
+  ^ " ]"
