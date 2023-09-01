@@ -20,31 +20,27 @@ and jvalue =
   | JArray of jvalue jarray
   | JObject of jvalue jobj
 
+let defer_ (f : unit -> 'a parser) = defer (fun _ -> f ())
 let obj_null = (fun _ -> JNull) <$> null
 let obj_bool = (fun b -> JBool b) <$> (true_ <|> false_)
 let obj_string = (fun s -> JString s) <$> string_
 let obj_number = (fun n -> JNumber n) <$> number
 
 let rec jentry (_ : unit) =
-  (fun k v -> (k, v))
-  <$> string_
-  <*> space *> colon *> space *> defer (fun _ -> jvalue ())
+  (fun k v -> (k, v)) <$> string_ <*> space *> colon *> space *> defer_ jvalue
 
 and jvalue (_ : unit) =
-  obj_null
-  <|> defer (fun _ -> jrecords ())
-  <|> obj_string <|> obj_number <|> obj_bool
-  <|> defer (fun _ -> jarray ())
+  obj_null <|> defer_ jrecords <|> obj_string <|> obj_number <|> obj_bool
+  <|> defer_ jarray
 
 and jarray (_ : unit) =
   (fun x -> JArray x)
-  <$> lsquare *> space *> sequence (defer (fun _ -> jvalue ())) (pure [])
+  <$> lsquare *> space *> sequence (defer_ jvalue) (pure [])
   <* space <* rsquare
 
 and jrecords (_ : unit) =
   (fun x -> JObject x)
-  <$> (space *> lbrace *> space
-       *> sequence (defer (fun _ -> jentry ())) (pure [])
+  <$> (space *> lbrace *> space *> sequence (defer_ jentry) (pure [])
       <* space <* rbrace)
 
-let parse = jrecords
+let parse = run @@ jrecords ()
