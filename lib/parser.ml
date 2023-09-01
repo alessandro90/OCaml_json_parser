@@ -21,7 +21,7 @@ let alt (p : 'a parser) (p1 : 'b parser) =
   Parser
     (fun (s : string) ->
       let res = run p s in
-      Result.fold ~ok:(fun _ -> res) ~error:(fun _ -> run p1 s) res)
+      Result.fold ~ok:(Fun.const res) ~error:(fun _ -> run p1 s) res)
 
 let ( <|> ) = alt
 let mtuple f (v, str) = (f v, str)
@@ -106,8 +106,8 @@ let space =
        <|> satisfy (( = ) '\t') @@ not_found "tab"))
     (fun _ _ -> ())
 
-let true_ = (fun _ -> true) <$> exact_str "true"
-let false_ = (fun _ -> false) <$> exact_str "false"
+let true_ = Fun.const true <$> exact_str "true"
+let false_ = Fun.const false <$> exact_str "false"
 let null = exact_str "null"
 let quote = satisfy (( = ) '"') @@ not_found "\""
 let dot = satisfy (( = ) '.') @@ not_found "."

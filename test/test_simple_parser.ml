@@ -44,12 +44,12 @@ let check_newline s expected_str =
 let check_string s expected_str =
   match run string_ s with
   | Error _ -> assert_failure "Could not match expected string"
-  | Ok (s', _) -> assert_equal ~printer:(fun x -> x) s' expected_str
+  | Ok (s', _) -> assert_equal ~printer:Fun.id s' expected_str
 
 let check_exact_string s expected_str =
   match run (exact_str expected_str) s with
   | Error _ -> assert_failure @@ "Could not match string: " ^ expected_str
-  | Ok (s', _) -> assert_equal ~printer:(fun x -> x) s' expected_str
+  | Ok (s', _) -> assert_equal ~printer:Fun.id s' expected_str
 
 let check_exact_string_fail s expected_str =
   match run (exact_str expected_str) s with

@@ -20,7 +20,7 @@ and jvalue =
   | JObject of jvalue jobj
 
 let defer_ (f : unit -> 'a parser) = defer (fun _ -> f ())
-let obj_null = (fun _ -> JNull) <$> null
+let obj_null = Fun.const JNull <$> null
 let obj_bool = (fun b -> JBool b) <$> (true_ <|> false_)
 let obj_string = (fun s -> JString s) <$> string_
 let obj_number = (fun n -> JNumber n) <$> number
