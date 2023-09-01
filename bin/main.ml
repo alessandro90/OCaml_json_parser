@@ -1,8 +1,8 @@
-open Json_parser.Parser
+open Json_parser.Jparser
 
 let () =
-  let s = {|"A
-st\"ring"|} in
-  match run string_ s with
-  | Error _ -> print_endline "Error found"
-  | Ok (s', _) -> print_endline s'
+  let text = {|{ "x": { "z": 1, "x": [1, {"k": "wow"}] }, "y": "hello"}|} in
+  let parsed = parse text in
+  let as_string = Result.map (fun (jv, s) -> (to_string jv, s)) parsed in
+  print_endline
+  @@ match as_string with Error _ -> "Could not parse" | Ok (s, _) -> s

@@ -25,13 +25,13 @@ let check_char_empty =
       assert_failure @@ "Expected failure, got" ^ str_from_char c' ^ ", " ^ s'
 
 let check_satisfy_ok c s =
-  match run (satisfy (( = ) c)) s with
+  match run (satisfy (( = ) c) @@ not_found @@ String.make 1 c) s with
   | Error _ -> assert_failure @@ Printf.sprintf "Could not find the char: %c" c
   | Ok (c', s') ->
       assert_equal ~printer:print_ch_str (c', s') (s.[0], skip_first_char s)
 
 let check_satisfy_fail c s =
-  match run (satisfy (( = ) c)) s with
+  match run (satisfy (( = ) c) @@ not_found @@ String.make 1 c) s with
   | Error _ -> success
   | Ok (c', s') ->
       assert_failure @@ "Expected failure, got" ^ str_from_char c' ^ ", " ^ s'

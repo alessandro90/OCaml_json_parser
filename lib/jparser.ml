@@ -1,7 +1,6 @@
 (*
     TODO:
      * support for unicode characters
-     * stringify
      * lookup and insertion
      * Track line number and column number in errors
      * error if json does not end with last }
@@ -44,3 +43,22 @@ and jrecords (_ : unit) =
       <* space <* rbrace)
 
 let parse = run (jrecords () <* space)
+
+let rec to_string (jv : jvalue) : string =
+  match jv with
+  | JNull -> "null"
+  | JString s -> s
+  | JNumber n -> string_of_float n
+  | JBool b -> if b then "true" else "false"
+  | JObject obj -> jobject_to_string obj
+  | JArray a -> jarray_to_string a
+
+and jobject_to_string (obj : jvalue jobj) : string =
+  "{"
+  ^ List.fold_left
+      (fun acc (k, v) -> acc ^ "\"" ^ k ^ "\":" ^ to_string v)
+      "" obj
+  ^ "}"
+
+and jarray_to_string (a : jvalue jarray) : string =
+  "[" ^ List.fold_left (fun acc v -> acc ^ ", " ^ to_string v) "" a ^ "]"

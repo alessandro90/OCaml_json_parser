@@ -1,10 +1,8 @@
 type error =
-  | SyntaxError
-  | NotFoundError of char
-  | EOSError
+  | JErrorEof
   | CustomError of string
-  | CharMismatchError of char
-  | NotANumberError
+  | JErrorCharNotFound of string
+  | NotANumberError of string
 
 type 'a parser = Parser of (string -> ('a * string, error) result)
 
@@ -17,6 +15,7 @@ end
 let run (Parser p) = p
 let pure x = Parser (fun s -> Ok (x, s))
 let fail x = Parser (fun _ -> Error x)
+let not_found s = "Could not find " ^ s
 
 let alt (p : 'a parser) (p1 : 'b parser) =
   Parser
@@ -59,48 +58,60 @@ let char_ =
   Parser
     (fun s ->
       let len = String.length s in
-      if len = 0 then Error EOSError else Ok (s.[0], String.sub s 1 (len - 1)))
+      if len = 0 then Error JErrorEof else Ok (s.[0], String.sub s 1 (len - 1)))
 
-let satisfy (pred : char -> bool) : char parser =
-  char_ >>= fun c -> if pred c then pure c else fail (CharMismatchError c)
+let satisfy (pred : char -> bool) (msg_err : string) : char parser =
+  char_ >>= fun c ->
+  if pred c then pure c else fail (JErrorCharNotFound msg_err)
 
 let rec satisfy_many_aux (preds : (char -> bool) list) (acc : string)
-    (s : string) =
+    (s : string) (target : string) =
   match preds with
   | [] -> Ok (acc, s)
   | h :: t ->
       Result.join
-      @@ Result.map (fun (c, str) -> satisfy_many_aux t (append_char c acc) str)
-      @@ run (satisfy h) s
+      @@ Result.map (fun (c, str) ->
+             satisfy_many_aux t (append_char c acc) str target)
+      @@ run (satisfy h @@ not_found target) s
 
-let satisfy_many (preds : (char -> bool) list) =
-  Parser (fun s -> satisfy_many_aux preds "" s)
+let satisfy_many (preds : (char -> bool) list) (target : string) =
+  Parser (fun s -> satisfy_many_aux preds "" s target)
 
 let exact_str s =
   let str = s |> String.to_seq |> List.of_seq in
-  satisfy_many (List.map (fun c -> ( = ) c) str)
+  satisfy_many (List.map (fun c -> ( = ) c) str) s
 
 let is_digit c = match c with '0' .. '9' -> true | _ -> false
-let normal_char = satisfy (fun c -> c <> '"' && c <> '\\')
-let comma = satisfy (( = ) ',')
-let newline = (optional @@ satisfy (( = ) '\r')) *> satisfy (( = ) '\n')
-let lbrace = satisfy (( = ) '{')
-let rbrace = satisfy (( = ) '}')
-let lsquare = satisfy (( = ) '[')
-let rsquare = satisfy (( = ) ']')
-let colon = satisfy (( = ) ':')
+
+let normal_char =
+  satisfy (fun c -> c <> '"' && c <> '\\') @@ not_found "quote or backslash"
+
+let comma = satisfy (( = ) ',') @@ not_found ","
+
+let newline =
+  (optional @@ satisfy (( = ) '\r') @@ not_found "\"r")
+  *> (satisfy (( = ) '\n') @@ not_found "\"n")
+
+let lbrace = satisfy (( = ) '{') @@ not_found "{"
+let rbrace = satisfy (( = ) '}') @@ not_found "}"
+let lsquare = satisfy (( = ) '[') @@ not_found "["
+let rsquare = satisfy (( = ) ']') @@ not_found "]"
+let colon = satisfy (( = ) ':') @@ not_found ":"
 
 let space =
   many (pure ())
-    (pure () <* (satisfy (( = ) ' ') <|> newline <|> satisfy (( = ) '\t')))
+    (pure ()
+    <* (satisfy (( = ) ' ') @@ not_found "white space"
+       <|> newline
+       <|> satisfy (( = ) '\t') @@ not_found "tab"))
     (fun _ _ -> ())
 
 let true_ = (fun _ -> true) <$> exact_str "true"
 let false_ = (fun _ -> false) <$> exact_str "false"
 let null = exact_str "null"
-let quote = satisfy (( = ) '"')
-let dot = satisfy (( = ) '.')
-let digit = satisfy is_digit
+let quote = satisfy (( = ) '"') @@ not_found "\""
+let dot = satisfy (( = ) '.') @@ not_found "."
+let digit = satisfy is_digit @@ not_found "digit"
 
 let escape =
   exact_str {|\"|} *> pure '"'
@@ -119,9 +130,12 @@ let sequence (p : 'a parser) (purefn : 'a list parser) : 'a list parser =
 
 let number =
   let* num =
-    (fun s -> float_of_string_opt s |> Option.to_result ~none:NotANumberError)
+    (fun s ->
+      float_of_string_opt s |> Option.to_result ~none:(NotANumberError s))
     <$> some (pure "")
-          (digit <|> dot <|> satisfy (fun x -> x = '-' || x = 'e' || x = 'E'))
+          (digit <|> dot
+          <|> satisfy (fun x -> x = '-' || x = 'e' || x = 'E')
+              @@ not_found "'-' or 'e' or 'E'")
           prepend_char
   in
   match num with Error e -> fail e | Ok v -> pure v
