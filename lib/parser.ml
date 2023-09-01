@@ -6,12 +6,6 @@ type error =
 
 type 'a parser = Parser of (string -> ('a * string, error) result)
 
-module type Pure = sig
-  type t
-
-  val pure : t parser
-end
-
 let run (Parser p) = p
 let pure x = Parser (fun s -> Ok (x, s))
 let fail x = Parser (fun _ -> Error x)
