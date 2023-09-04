@@ -1,8 +1,7 @@
 type error =
-  | JErrorEof
-  | CustomError of string
-  | JErrorCharNotFound of string
-  | NotANumberError of string
+  | ParseErrorEof
+  | ParseErrorCharNotFound of string
+  | ParseErrorNotANumber of string
 
 type 'a parser = Parser of (string -> ('a * string, error) result)
 
@@ -52,11 +51,12 @@ let char_ =
   Parser
     (fun s ->
       let len = String.length s in
-      if len = 0 then Error JErrorEof else Ok (s.[0], String.sub s 1 (len - 1)))
+      if len = 0 then Error ParseErrorEof
+      else Ok (s.[0], String.sub s 1 (len - 1)))
 
 let satisfy (pred : char -> bool) (msg_err : string) : char parser =
   char_ >>= fun c ->
-  if pred c then pure c else fail (JErrorCharNotFound msg_err)
+  if pred c then pure c else fail (ParseErrorCharNotFound msg_err)
 
 let rec satisfy_many_aux (preds : (char -> bool) list) (acc : string)
     (s : string) (target : string) =
@@ -125,7 +125,7 @@ let sequence (p : 'a parser) (purefn : 'a list parser) : 'a list parser =
 let number =
   let* num =
     (fun s ->
-      float_of_string_opt s |> Option.to_result ~none:(NotANumberError s))
+      float_of_string_opt s |> Option.to_result ~none:(ParseErrorNotANumber s))
     <$> some (pure "")
           (digit <|> dot
           <|> satisfy (fun x -> x = '-' || x = 'e' || x = 'E')
