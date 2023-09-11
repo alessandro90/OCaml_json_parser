@@ -57,13 +57,13 @@ let check_exact_string_fail s expected_str =
   | Ok (s', _) -> assert_failure @@ "Invalid match: " ^ s'
 
 let check_sequence_list_bool (s : string) (expected_seq : bool list) =
-  match run (sequence (true_ <|> false_) (pure [])) s with
+  match run (sequence (module Bool) (true_ <|> false_)) s with
   | Error _ -> assert_failure "Could not match sequence"
   | Ok (ls, _) ->
       assert_equal ~printer:(print_list string_of_bool) expected_seq ls
 
 let check_sequence_list_bool_fail (s : string) =
-  match run (sequence (true_ <|> false_) (pure [])) s with
+  match run (sequence (module Bool) (true_ <|> false_)) s with
   | Error _ -> success
   | Ok (ls, _) ->
       assert_failure @@ "Matched an invalid list: "

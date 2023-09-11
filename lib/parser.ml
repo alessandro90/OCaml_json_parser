@@ -40,12 +40,43 @@ let defer (f : unit -> 'a parser) = Parser (fun s -> run (f ()) s)
 let prepend_char c s = String.make 1 c ^ s
 let append_char c s = s ^ String.make 1 c
 
-let rec some (null_case : 'b parser) (p : 'a parser) (cons : 'a -> 'b -> 'b) :
-    'b parser =
-  cons <$> p <*> defer (fun _ -> many null_case p cons)
+module type Empty = sig
+  type t
 
-and many (null_case : 'b parser) (p : 'a parser) (cons : 'a -> 'b -> 'b) =
-  some null_case p cons <|> null_case
+  val empty : t
+end
+
+module Any =
+functor
+  (S : Empty)
+  ->
+  struct
+    let rec some (p : 'a parser) (cons : 'a -> S.t -> S.t) : S.t parser =
+      cons <$> p <*> defer (fun _ -> many p cons)
+
+    and many (p : 'a parser) (cons : 'a -> S.t -> S.t) : S.t parser =
+      some p cons <|> pure S.empty
+  end
+
+module AnyString = Any (struct
+  type t = string
+
+  let empty = ""
+end)
+
+module AnyUnit = Any (struct
+  type t = unit
+
+  let empty = ()
+end)
+
+module EmptyList (S : sig
+  type t
+end) : Empty with type t = S.t list = struct
+  type t = S.t list
+
+  let empty = []
+end
 
 let char_ =
   Parser
@@ -93,7 +124,7 @@ let rsquare = satisfy (( = ) ']') @@ not_found "]"
 let colon = satisfy (( = ) ':') @@ not_found ":"
 
 let space =
-  many (pure ())
+  AnyUnit.many
     (pure ()
     <* (satisfy (( = ) ' ') @@ not_found "white space"
        <|> newline
@@ -116,17 +147,25 @@ let escape =
   <|> exact_str {|\\|} *> pure '\\'
 
 let string_ =
-  quote *> many (pure "") (normal_char <|> escape) prepend_char <* quote
+  quote *> AnyString.many (normal_char <|> escape) prepend_char <* quote
 
-let sequence (p : 'a parser) (purefn : 'a list parser) : 'a list parser =
+module type Type = sig
+  type t
+end
+
+let sequence (type a) (module M : Type with type t = a) (p : a parser) :
+    a list parser =
+  let module EmptyM = EmptyList (M) in
+  let module AsAny = Any (EmptyM) in
   let sep = space *> comma *> space in
-  List.cons <$> space *> p <*> (many purefn (sep *> p) List.cons <|> pure [])
+  List.cons <$> space *> p
+  <*> (AsAny.many (sep *> p) List.cons <|> pure EmptyM.empty)
 
 let number =
   let* num =
     (fun s ->
       float_of_string_opt s |> Option.to_result ~none:(ParseErrorNotANumber s))
-    <$> some (pure "")
+    <$> AnyString.some
           (digit <|> dot
           <|> satisfy (fun x -> x = '-' || x = 'e' || x = 'E')
               @@ not_found "'-' or 'e' or 'E'")

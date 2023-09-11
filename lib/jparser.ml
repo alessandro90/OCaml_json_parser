@@ -25,6 +25,14 @@ let obj_bool = (fun b -> JBool b) <$> (true_ <|> false_)
 let obj_string = (fun s -> JString s) <$> string_
 let obj_number = (fun n -> JNumber n) <$> number
 
+module JValue = struct
+  type t = jvalue
+end
+
+module JEntry = struct
+  type t = string * jvalue
+end
+
 let rec jentry (_ : unit) =
   (fun k v -> (k, v)) <$> string_ <*> space *> colon *> space *> defer_ jvalue
 
@@ -34,12 +42,12 @@ and jvalue (_ : unit) =
 
 and jarray (_ : unit) =
   (fun x -> JArray x)
-  <$> lsquare *> space *> sequence (defer_ jvalue) (pure [])
+  <$> lsquare *> space *> sequence (module JValue) (defer_ jvalue)
   <* space <* rsquare
 
 and jrecords (_ : unit) =
   (fun x -> JObject x)
-  <$> (space *> lbrace *> space *> sequence (defer_ jentry) (pure [])
+  <$> (space *> lbrace *> space *> sequence (module JEntry) (defer_ jentry)
       <* space <* rbrace)
 
 let parse = run (jrecords () <* space)
