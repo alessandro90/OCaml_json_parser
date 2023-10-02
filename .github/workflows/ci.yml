@@ -7,9 +7,9 @@ on:
       - '**/*.md'
       - '**/LICENSE'
       - '**/.gitignore'
-  schedule:
+  # schedule:
     # Prime the caches every Monday
-    - cron: 0 1 * * MON
+    # - cron: 0 1 * * MON
 
 permissions: read-all
 
